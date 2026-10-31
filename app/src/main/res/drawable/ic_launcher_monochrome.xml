@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monochrome (themed-icon) silhouette of 奶蛙: body + feet only, so Android can tint it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M45.2,80 L51.2,80 L51.2,85 A3,3 0 0 1 45.2,85 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M56.8,80 L62.8,80 L62.8,85 A3,3 0 0 1 56.8,85 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,25.5
+            C44.2,25.5 37.6,31.6 36.2,40.8
+            C34.8,49.8 31.0,57.6 29.6,64.8
+            C27.8,74.0 34.6,85.2 54,85.2
+            C73.4,85.2 80.2,74.0 78.4,64.8
+            C77.0,57.6 73.2,49.8 71.8,40.8
+            C70.4,31.6 63.8,25.5 54,25.5 Z" />
+</vector>

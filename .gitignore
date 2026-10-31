@@ -1,0 +1,19 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+/app/build
+
+# build output / local toolchain
+*.apk
+*.zip
+_tmp/
+_gradle_home/
+_android_home/
+_android_sdk/

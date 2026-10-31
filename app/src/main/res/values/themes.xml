@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MindBellPomodoro" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Compose provides the actual theme; this is only the launch/splash fallback. -->
+    </style>
+</resources>
