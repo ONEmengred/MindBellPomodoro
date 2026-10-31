@@ -11,6 +11,14 @@ Kotlin + Jetpack Compose + Material 3，单模块工程，`minSdk 26` / `targetS
 
 ---
 
+## 下载
+
+到 [Releases](https://github.com/ONEmengred/MindBellPomodoro/releases/latest) 下 `MindBellPomodoro-1.0.0-release.apk`，直接装上就能用（Android 8.0 / API 26 及以上）。
+
+> 不想装别人的包，也可以自己编译，见下面的「构建」。
+
+---
+
 ## 功能
 
 ### 模块 A · 正念铃（三个模式）
@@ -103,20 +111,43 @@ app/src/test/java/com/mindfulfocus/core/TimerEngineTest.kt   计时引擎单元�
 
 ```bash
 ./gradlew :app:assembleDebug      # 打 debug APK
-./gradlew :app:test               # 跑计时引擎单元测试
+./gradlew :app:assembleRelease    # 打签名 release APK（需要下面的签名配置）
+./gradlew :app:testDebugUnitTest  # 跑计时引擎单元测试
 ```
 
-首次用 Android Studio 打开时，若缺少 Gradle wrapper，选择从 `gradle-wrapper.properties` 读取，
-先执行一次 `gradle wrapper --gradle-version 8.9` 生成 `gradle-wrapper.jar`。
+仓库里没有 `gradle-wrapper.jar`（只提交了 `gradle-wrapper.properties` 里的版本号）。
+用命令行时直接 `gradle wrapper --gradle-version 8.9` 生成一次，或用系统装的 Gradle 8.9 跑。
 
 关键版本：AGP 8.7.2 / Kotlin 2.0.21 / Compose BOM 2024.10.01 / KSP 2.0.21-1.0.28 / Gradle 8.9。
+
+### 签名（发布包）
+
+签名文件不进仓库。要打 release 包，在工程根目录建一个 `keystore.properties`（已在 `.gitignore` 里排除）：
+
+```properties
+storeFile=/绝对路径/release.jks
+storePassword=******
+keyAlias=mindbell
+keyPassword=******
+```
+
+没有这个文件也能正常构建，只是 `assembleRelease` 产出的是**未签名**包。
+
+### CI
+
+`.github/workflows/android.yml`：每次 push / PR 到 `main` 都会用 Gradle 8.9 跑单元测试 + `assembleDebug`，
+并把 APK 与测试报告作为 artifact 上传。
+
+想让它顺便产出签名 release 包，在仓库 Settings → Secrets 里配好
+`KEYSTORE_BASE64`（keystore 文件的 base64 文本）、`KEYSTORE_STORE_PASSWORD`、`KEYSTORE_KEY_ALIAS`、
+`KEYSTORE_KEY_PASSWORD`，工作流会自动启用这一步。
 
 ---
 
 ## 状态
 
-代码已在本机用 JDK 21 + Android SDK 35 + Gradle 8.9 编译通过，`assembleDebug` 与
-`testDebugUnitTest`（11 个用例）均通过，产出的 debug APK 可直接安装。
+在本机用 JDK 21 + Android SDK 35 + Gradle 8.9 编译通过：`assembleDebug`、`assembleRelease`、
+`testDebugUnitTest`（11 个用例）全部通过，release APK 已用独立 keystore 签名并发布到 Releases。
 
 ---
 

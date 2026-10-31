@@ -17,3 +17,8 @@ _tmp/
 _gradle_home/
 _android_home/
 _android_sdk/
+
+# signing material — never commit
+keystore.properties
+*.jks
+*.keystore
