@@ -122,6 +122,8 @@ app/src/test/java/com/mindfulfocus/core/TimerEngineTest.kt   计时引擎单元�
 
 ## 许可
 
-未指定开源许可。
+[MIT](LICENSE) © 2026 ONEmeng
+
+欢迎拿去改、拿去用，也欢迎提 Issue / PR。
 
 > 顺带说一句：App 里藏了一个小彩蛋，自己找找看 🙂
