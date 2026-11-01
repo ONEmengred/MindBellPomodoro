@@ -7,6 +7,7 @@ import android.os.IBinder
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.mindfulfocus.MindFocusApp
+import com.mindfulfocus.core.DiagLog
 import com.mindfulfocus.core.PomodoroPhase
 import com.mindfulfocus.core.RandomPhase
 import com.mindfulfocus.core.RunStatus
@@ -54,6 +55,7 @@ class TimerForegroundService : LifecycleService() {
         notifier.ensureChannels()
         startForeground(AlertNotifier.ID_ONGOING, notifier.ongoingNotification("准备就绪"))
         lastOngoingText = "准备就绪"
+        DiagLog.serviceStarted()
         startTicking()
     }
 
@@ -69,11 +71,13 @@ class TimerForegroundService : LifecycleService() {
             while (isActive) {
                 try {
                     val events = controller.tickAll()
+                    DiagLog.tick()
                     handleEvents(events)
                     refreshOngoing()
                     syncAlarm()
                 } catch (e: Exception) {
-                    // Never let one bad tick kill the loop.
+                    // Never let one bad tick kill the loop — but do record why.
+                    DiagLog.error("tick", e)
                 }
                 delay(1000L)
             }
@@ -84,6 +88,15 @@ class TimerForegroundService : LifecycleService() {
         if (events.isEmpty()) return
         // Every ring / phase change / session end becomes a visible alert.
         notifier.notifyForEvents(events)
+        events.forEach { event ->
+            when (event) {
+                is TimerEvent.Ring -> DiagLog.ring("${event.type} 铃声")
+                is TimerEvent.BlindBell -> DiagLog.ring("正念盲盒铃声")
+                is TimerEvent.CloseBell -> DiagLog.ring("盲盒收尾音")
+                is TimerEvent.PhaseChanged -> DiagLog.ring("番茄阶段 ${event.from}→${event.to}")
+                TimerEvent.Finished -> DiagLog.note("会话结束")
+            }
+        }
         if (events.any { it == TimerEvent.Finished }) {
             // Record meditation history if the finished session was meditation.
             val all = controller.observeAllSessions().first()
@@ -162,8 +175,16 @@ class TimerForegroundService : LifecycleService() {
         AlarmScheduler.scheduleNext(this, next)
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Swiping the app away may kill the process. The system keeps our alarm, so the
+        // session still comes back on time; just record it for the self-check page.
+        DiagLog.note("任务被划掉（闹钟仍保留）")
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         tickJob?.cancel()
+        DiagLog.note("前台服务已停止")
         super.onDestroy()
     }
 

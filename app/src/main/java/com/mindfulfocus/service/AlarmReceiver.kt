@@ -4,6 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.mindfulfocus.MindFocusApp
+import com.mindfulfocus.core.BlindBoxSound
+import com.mindfulfocus.core.DiagLog
 import com.mindfulfocus.core.RunStatus
 import com.mindfulfocus.core.TimerEngine
 import kotlinx.coroutines.flow.first
@@ -22,12 +24,22 @@ class AlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val app = context.applicationContext as? MindFocusApp ?: return
+        val isTest = intent.action == AlarmScheduler.ACTION_TEST
         val pendingResult = goAsync()
         app.applicationScope.launch {
             try {
                 val container = app.container
-                val events = container.controller.tickAll()
                 container.alertNotifier.ensureChannels()
+                DiagLog.alarmFired()
+
+                if (isTest) {
+                    container.controller.previewBlindSound(BlindBoxSound.CHIME, 90)
+                    container.alertNotifier.ring("自检 · 闹钟通路", "这条通知说明精确闹钟能叫醒 App")
+                    DiagLog.note("测试闹钟触发（通知 + 铃声）")
+                    return@launch
+                }
+
+                val events = container.controller.tickAll()
                 container.alertNotifier.notifyForEvents(events)
 
                 val all = container.controller.observeAllSessions().first()
@@ -41,11 +53,12 @@ class AlarmReceiver : BroadcastReceiver() {
                 if (all.values.any { it.status == RunStatus.RUNNING }) {
                     try {
                         TimerForegroundService.start(app)
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
+                        DiagLog.error("restart service", e)
                     }
                 }
-            } catch (_: Exception) {
-                // Never let a receiver crash the process.
+            } catch (e: Exception) {
+                DiagLog.error("alarm receiver", e)
             } finally {
                 pendingResult.finish()
             }

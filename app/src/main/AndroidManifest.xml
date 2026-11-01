@@ -14,6 +14,8 @@
     <!-- Exact alarms: wake the process at the precise moment a bell is due, even in Doze -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Lets the self-check page offer "stop freezing this app" on aggressive ROMs -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:name=".MindFocusApp"

@@ -17,7 +17,7 @@ Kotlin + Jetpack Compose + Material 3，单模块工程，`minSdk 26` / `targetS
 
 ## 下载
 
-到 [Releases](https://github.com/ONEmengred/MindBellPomodoro/releases/latest) 下 `MindBellPomodoro-1.0.1-release.apk`，直接装上就能用（Android 8.0 / API 26 及以上）。
+到 [Releases](https://github.com/ONEmengred/MindBellPomodoro/releases/latest) 下 `MindBellPomodoro-1.0.2-release.apk`，直接装上就能用（Android 8.0 / API 26 及以上）。
 
 > 不想装别人的包，也可以自己编译，见下面的「构建」。
 
@@ -85,6 +85,7 @@ app/src/main/java/com/mindfulfocus/
 │   ├── SessionType.kt           会话类型 / 状态 / SessionSnapshot（核心状态模型）
 │   ├── Settings.kt              各模式设置 + 时间窗
 │   ├── TimerEngine.kt           ★计时大脑：纯函数，按时间戳推进并产生事件
+│   ├── DiagLog.kt               运行日志（落 diag.log），供自检页诊断后台
 │   └── SessionController.kt     命令入口：start/pause/resume/stop + 每秒 tickAll
 ├── data/
 │   ├── AppDataStore.kt          设置与会话快照持久化
@@ -96,13 +97,14 @@ app/src/main/java/com/mindfulfocus/
 ├── service/
 │   ├── TimerForegroundService.kt 前台服务，每秒 tick，常驻通知（带倒计时）
 │   ├── AlertNotifier.kt          通知渲染：常驻倒计时 + 每次铃响的提醒
-│   ├── AlarmScheduler.kt         精确闹钟（setExactAndAllowWhileIdle）兜底
+│   ├── AlarmScheduler.kt         精确闹钟（setAlarmClock）兜底 + 10 秒自检闹钟
 │   ├── AlarmReceiver.kt          闹钟到点补跑一次 tick
 │   └── BootReceiver.kt           开机恢复
 └── ui/
     ├── AppRoot.kt               底部导航 + NavHost
     ├── theme/Theme.kt           暖黄 / 白配色
     ├── components/              倒计时环、分段标签、数字输入步进器
+    ├── diagnostics/             自检卡片：为什么没响
     ├── bell/                    正念铃（定时提醒 / 冥想 / 正念盲盒）
     ├── pomodoro/                番茄钟
     └── history/                 统计
@@ -117,10 +119,16 @@ app/src/test/java/com/mindfulfocus/core/TimerEngineTest.kt   计时引擎单元�
 Android 会把后台进程冻结、Doze 会拖慢轮询、部分厂商 ROM 更是直接杀进程。所以「准点响铃」不靠单一的 `delay(1000)` 循环，而是三层冗余，任一层活着就够：
 
 1. **前台服务每秒 tick** —— 进程活着时最快，常驻通知里直接显示剩余倒计时（`专注 12:34`），盲盒模式下按设置隐藏数字。
-2. **精确闹钟兜底** —— 每次 tick 后把「最近一个待触发时刻」交给 `AlarmManager.setExactAndAllowWhileIdle`；即使 Doze 把循环冻住，闹钟也会在那一刻唤醒进程（`AlarmReceiver` 补跑一次 tick 并重新排下一个闹钟）。
+2. **精确闹钟兜底** —— 每次 tick 后把「最近一个待触发时刻」交给 `AlarmManager.setAlarmClock`（最可靠：精确、免 Doze、被 ROM 杀进程也照样触发；不可用时依次降级到 `setExactAndAllowWhileIdle` / `setAndAllowWhileIdle`）；即使 Doze 把循环冻住，闹钟也会在那一刻唤醒进程（`AlarmReceiver` 补跑一次 tick、弹出通知并重新排下一个闹钟）。
 3. **每次铃响都有通知** —— 所有铃声事件（定时提醒 / 冥想 / 盲盒 / 番茄钟阶段切换）都会发一条高优先级 heads-up 通知并振动，媒体音量小或静音时也不会漏。
 
 因为计时全部基于绝对时间戳，补跑/重复触发都是幂等的：晚到的闹钟只会把错过的铃声补上，不会打乱状态。
+
+### 铃不响？先看「自检」卡片
+
+统计页顶部有一张 **自检 · 为什么没响** 卡片（v1.0.2 起）。后台不响铃的原因有五六种，只看现象分不清是哪一种，所以这里逐项读出真实状态：通知权限、铃响渠道是否被关、精确闹钟是否允许、有没有被电池优化冻结、媒体音量、后台服务是否还在跑、已排定闹钟的时刻与剩余时间、最近一次铃响、最近一次报错，以及最近 15 行运行日志（`DiagLog` 写入 `files/diag.log`，被系统杀进程也留得下）。
+
+卡片上还能一键做三件事：**「10 秒后测试闹钟」**（把 App 退到后台，10 秒后应该响铃 + 弹通知，这一条就能验证整条后台通路）、发测试通知、以及跳到系统的通知 / 精确闹钟 / 电池优化设置页。
 
 
 ---

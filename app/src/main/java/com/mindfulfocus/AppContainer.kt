@@ -4,6 +4,7 @@ import android.content.Context
 import com.mindfulfocus.audio.BellPlayer
 import com.mindfulfocus.audio.ToneSynth
 import com.mindfulfocus.audio.VibrationManager
+import com.mindfulfocus.core.DiagLog
 import com.mindfulfocus.core.SessionController
 import com.mindfulfocus.data.AppDataStore
 import com.mindfulfocus.data.AppDatabase
@@ -15,6 +16,11 @@ import com.mindfulfocus.service.AlertNotifier
  * the exact same controller / datastore / database instances.
  */
 class AppContainer(context: Context) {
+
+    init {
+        // Replay the persisted self-check log as soon as the process starts.
+        DiagLog.attach(context)
+    }
 
     val dataStore = AppDataStore(context.applicationContext)
     val database = AppDatabase.get(context)

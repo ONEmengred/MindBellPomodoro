@@ -21,7 +21,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mindfulfocus.ui.components.NaiWaEasterEgg
+import com.mindfulfocus.ui.diagnostics.DiagnosticsCard
 import com.mindfulfocus.ui.formatDuration
+import com.mindfulfocus.ui.rememberNow
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -33,6 +35,7 @@ fun HistoryScreen(vm: HistoryViewModel) {
     val totalMeditation by vm.totalMeditationMs.collectAsStateWithLifecycle()
     val completedPomodoros by vm.completedPomodoroCount.collectAsStateWithLifecycle()
     val totalFocus by vm.totalFocusMs.collectAsStateWithLifecycle()
+    val now = rememberNow()
 
     LazyColumn(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
@@ -46,6 +49,9 @@ fun HistoryScreen(vm: HistoryViewModel) {
                 }
             }
         }
+
+        // 铃不响时的自检入口：所有后台能不能响的前提条件都在这里逐项列出。
+        item { DiagnosticsCard(now) }
 
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
