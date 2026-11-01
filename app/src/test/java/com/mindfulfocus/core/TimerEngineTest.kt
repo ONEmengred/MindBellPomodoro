@@ -202,4 +202,52 @@ class TimerEngineTest {
         assertTrue(tick.events.isEmpty())
         assertEquals(RandomPhase.FOCUS, tick.snapshot.randomPhase)
     }
+
+    @Test
+    fun nextTrigger_isZeroWhenNothingRuns() {
+        val snap = TimerEngine.startIntervalBell(
+            IntervalBellSettings(intervalMinutes = 10, enabledActiveWindow = false, enabledDnd = false),
+            base
+        )
+        assertEquals(0L, TimerEngine.nextTriggerEpochMs(TimerEngine.stop(snap)))
+    }
+
+    @Test
+    fun nextTrigger_isTheSoonestBellOrPhaseEnd() {
+        // Interval bell: the only trigger is the next bell.
+        val settings = IntervalBellSettings(intervalMinutes = 10, enabledActiveWindow = false, enabledDnd = false)
+        val interval = TimerEngine.startIntervalBell(settings, base)
+        assertEquals(interval.nextBellEpochMs, TimerEngine.nextTriggerEpochMs(interval))
+
+        // Meditation: the earliest pending interval bell wins over the sitting end.
+        val med = TimerEngine.startMeditation(
+            MeditationSettings(
+                sessionMinutes = 20,
+                prepSeconds = 0,
+                intervalBellMinutes = 5,
+                startBell = false,
+                intervalBell = true,
+                endBell = true
+            ),
+            base
+        )
+        val medNext = TimerEngine.nextTriggerEpochMs(med)
+        assertEquals(med.pendingBellEpochs.min(), medNext)
+        assertTrue(medNext < med.phaseEndEpochMs)
+
+        // Blind box: the current focus phase end.
+        val blind = TimerEngine.startRandomMindful(
+            RandomMindfulSettings(minMinutes = 3f, maxMinutes = 5f), base, Random(5)
+        )
+        assertEquals(blind.phaseEndEpochMs, TimerEngine.nextTriggerEpochMs(blind))
+    }
+
+    @Test
+    fun ringEvent_carriesTheSessionType() {
+        val settings = IntervalBellSettings(intervalMinutes = 10, enabledActiveWindow = false, enabledDnd = false)
+        val snap = TimerEngine.startIntervalBell(settings, base)
+        val r = TimerEngine.tick(snap, base + 10 * minute, intervalSettings = settings)
+        val ring = r.events.filterIsInstance<TimerEvent.Ring>().single()
+        assertEquals(SessionType.INTERVAL_BELL, ring.type)
+    }
 }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monochrome status-bar icon: Android tints it, so it must be a flat white silhouette. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2.2c-1.05,0 -1.9,0.85 -1.9,1.9v0.42C7.15,5.35 5.1,7.95 5.1,11v4.3l-1.6,1.6c-0.4,0.4 -0.12,1.1 0.45,1.1h16.1c0.57,0 0.85,-0.7 0.45,-1.1l-1.6,-1.6V11c0,-3.05 -2.05,-5.65 -5,-6.48V4.1c0,-1.05 -0.85,-1.9 -1.9,-1.9z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M9.6,19.4h4.8c0,1.33 -1.08,2.4 -2.4,2.4s-2.4,-1.07 -2.4,-2.4z" />
+</vector>

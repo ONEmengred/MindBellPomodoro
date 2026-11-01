@@ -8,8 +8,9 @@ import kotlin.random.Random
  * What the foreground service should physically do when an event is due.
  */
 sealed interface TimerEvent {
-    /** Play a bell sound + optional vibration. */
+    /** Play a bell sound + optional vibration. [type] tells the caller which session rang. */
     data class Ring(
+        val type: SessionType,
         val sound: BellSound,
         val volumePercent: Int,
         val vibrate: Boolean
@@ -314,6 +315,22 @@ object TimerEngine {
         }
     }
 
+    /**
+     * The absolute epoch (ms) at which this session next needs attention — a phase end
+     * or the next recurring bell — or 0 when nothing is pending.
+     *
+     * The foreground service uses this to arm an [android.app.AlarmManager] alarm, so a
+     * bell still fires on time even when Doze / battery savers delay the 1s polling loop.
+     */
+    fun nextTriggerEpochMs(snapshot: SessionSnapshot): Long {
+        if (snapshot.status != RunStatus.RUNNING) return 0L
+        val candidates = mutableListOf<Long>()
+        if (snapshot.phaseEndEpochMs > 0L) candidates.add(snapshot.phaseEndEpochMs)
+        if (snapshot.nextBellEpochMs > 0L) candidates.add(snapshot.nextBellEpochMs)
+        snapshot.pendingBellEpochs.minOrNull()?.let { if (it > 0L) candidates.add(it) }
+        return candidates.filter { it > 0L }.minOrNull() ?: 0L
+    }
+
     private fun tickIntervalBell(
         s: SessionSnapshot,
         now: Long,
@@ -331,7 +348,7 @@ object TimerEngine {
             settings.doNotDisturb, settings.enabledDnd
         )
         if (!isSuppressed) {
-            events.add(TimerEvent.Ring(ring.first, ring.second, ring.third))
+            events.add(TimerEvent.Ring(SessionType.INTERVAL_BELL, ring.first, ring.second, ring.third))
         }
         val next = nextAllowedTime(
             now + settings.intervalMinutes * MINUTE, settings.intervalMinutes * MINUTE,
@@ -351,13 +368,13 @@ object TimerEngine {
         // Fire any interval bells that are due.
         val stillPending = mutableListOf<Long>()
         for (bellEpoch in s.pendingBellEpochs) {
-            if (bellEpoch <= now) events.add(TimerEvent.Ring(sound.first, sound.second, sound.third))
+            if (bellEpoch <= now) events.add(TimerEvent.Ring(SessionType.MEDITATION, sound.first, sound.second, sound.third))
             else stillPending.add(bellEpoch)
         }
         var updated = s.copy(pendingBellEpochs = stillPending)
         // End of sitting?
         if (s.phaseEndEpochMs in 1L..now) {
-            if (endBell) events.add(TimerEvent.Ring(sound.first, sound.second, sound.third))
+            if (endBell) events.add(TimerEvent.Ring(SessionType.MEDITATION, sound.first, sound.second, sound.third))
             events.add(TimerEvent.Finished)
             updated = updated.copy(
                 status = RunStatus.IDLE,
@@ -472,7 +489,7 @@ object TimerEngine {
         if (s.phaseEndEpochMs <= 0L || now < s.phaseEndEpochMs) return TickResult(s, emptyList())
 
         val events = mutableListOf<TimerEvent>()
-        events.add(TimerEvent.Ring(sound.first, sound.second, sound.third))
+        events.add(TimerEvent.Ring(SessionType.POMODORO, sound.first, sound.second, sound.third))
 
         val finishedPhase = s.pomodoroPhase
         val completed = if (finishedPhase == PomodoroPhase.FOCUS) s.completedPomodoros + 1 else s.completedPomodoros

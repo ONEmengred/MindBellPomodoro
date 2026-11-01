@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.mindfulfocus.MindFocusApp
 import com.mindfulfocus.core.RunStatus
+import com.mindfulfocus.core.TimerEngine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -25,6 +26,13 @@ class BootReceiver : BroadcastReceiver() {
         me.applicationScope.launch {
             try {
                 val all = me.container.controller.observeAllSessions().first()
+                // Re-arm the exact alarm first: it is the only thing that survives the
+                // service being killed again right after boot.
+                val next = all.values
+                    .map { TimerEngine.nextTriggerEpochMs(it) }
+                    .filter { it > 0L }
+                    .minOrNull() ?: 0L
+                AlarmScheduler.scheduleNext(context, next)
                 if (all.values.any { it.status == RunStatus.RUNNING }) {
                     TimerForegroundService.start(context)
                 }

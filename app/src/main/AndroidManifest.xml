@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Restore timers after reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Exact alarms: wake the process at the precise moment a bell is due, even in Doze -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <application
         android:name=".MindFocusApp"
@@ -41,6 +44,11 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Mindfulness bell reminders and pomodoro focus timer that must ring reliably in background and on lock screen" />
         </service>
+
+        <!-- Wakes the process at the exact moment a bell is due (Doze-proof backup) -->
+        <receiver
+            android:name=".service.AlarmReceiver"
+            android:exported="false" />
 
         <!-- Restore pending timers after device reboot -->
         <receiver

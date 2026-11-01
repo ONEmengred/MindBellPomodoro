@@ -7,6 +7,7 @@ import com.mindfulfocus.audio.VibrationManager
 import com.mindfulfocus.core.SessionController
 import com.mindfulfocus.data.AppDataStore
 import com.mindfulfocus.data.AppDatabase
+import com.mindfulfocus.service.AlertNotifier
 
 /**
  * Tiny manual dependency container (no Hilt needed for a project this size).
@@ -28,6 +29,9 @@ class AppContainer(context: Context) {
         vibration = vibration,
         synth = synth
     )
+
+    /** Shared notification surface (foreground service + alarm receiver). */
+    val alertNotifier = AlertNotifier(context.applicationContext)
 
     val historyDao get() = database.historyDao()
 }

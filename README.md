@@ -17,7 +17,7 @@ Kotlin + Jetpack Compose + Material 3，单模块工程，`minSdk 26` / `targetS
 
 ## 下载
 
-到 [Releases](https://github.com/ONEmengred/MindBellPomodoro/releases/latest) 下 `MindBellPomodoro-1.0.0-release.apk`，直接装上就能用（Android 8.0 / API 26 及以上）。
+到 [Releases](https://github.com/ONEmengred/MindBellPomodoro/releases/latest) 下 `MindBellPomodoro-1.0.1-release.apk`，直接装上就能用（Android 8.0 / API 26 及以上）。
 
 > 不想装别人的包，也可以自己编译，见下面的「构建」。
 
@@ -94,7 +94,10 @@ app/src/main/java/com/mindfulfocus/
 │   ├── BellPlayer.kt            SoundPool + 振动
 │   └── EasterEggPlayer.kt       彩蛋音效
 ├── service/
-│   ├── TimerForegroundService.kt 前台服务，每秒 tick，常驻通知
+│   ├── TimerForegroundService.kt 前台服务，每秒 tick，常驻通知（带倒计时）
+│   ├── AlertNotifier.kt          通知渲染：常驻倒计时 + 每次铃响的提醒
+│   ├── AlarmScheduler.kt         精确闹钟（setExactAndAllowWhileIdle）兜底
+│   ├── AlarmReceiver.kt          闹钟到点补跑一次 tick
 │   └── BootReceiver.kt           开机恢复
 └── ui/
     ├── AppRoot.kt               底部导航 + NavHost
@@ -104,8 +107,21 @@ app/src/main/java/com/mindfulfocus/
     ├── pomodoro/                番茄钟
     └── history/                 统计
 
-app/src/test/java/com/mindfulfocus/core/TimerEngineTest.kt   计时引擎单元测试（纯 JVM，11 个用例）
+app/src/test/java/com/mindfulfocus/core/TimerEngineTest.kt   计时引擎单元测试（纯 JVM，14 个用例）
 ```
+
+---
+
+## 后台提醒为什么不掉链子
+
+Android 会把后台进程冻结、Doze 会拖慢轮询、部分厂商 ROM 更是直接杀进程。所以「准点响铃」不靠单一的 `delay(1000)` 循环，而是三层冗余，任一层活着就够：
+
+1. **前台服务每秒 tick** —— 进程活着时最快，常驻通知里直接显示剩余倒计时（`专注 12:34`），盲盒模式下按设置隐藏数字。
+2. **精确闹钟兜底** —— 每次 tick 后把「最近一个待触发时刻」交给 `AlarmManager.setExactAndAllowWhileIdle`；即使 Doze 把循环冻住，闹钟也会在那一刻唤醒进程（`AlarmReceiver` 补跑一次 tick 并重新排下一个闹钟）。
+3. **每次铃响都有通知** —— 所有铃声事件（定时提醒 / 冥想 / 盲盒 / 番茄钟阶段切换）都会发一条高优先级 heads-up 通知并振动，媒体音量小或静音时也不会漏。
+
+因为计时全部基于绝对时间戳，补跑/重复触发都是幂等的：晚到的闹钟只会把错过的铃声补上，不会打乱状态。
+
 
 ---
 
@@ -151,7 +167,7 @@ keyPassword=******
 ## 状态
 
 在本机用 JDK 21 + Android SDK 35 + Gradle 8.9 编译通过：`assembleDebug`、`assembleRelease`、
-`testDebugUnitTest`（11 个用例）全部通过，release APK 已用独立 keystore 签名并发布到 Releases。
+`testDebugUnitTest`（14 个用例）全部通过，release APK 已用独立 keystore 签名并发布到 Releases。
 
 ---
 
