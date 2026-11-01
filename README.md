@@ -1,160 +1,109 @@
-# 正念铃 · 番茄钟（MindBellPomodoro）
+# 正念铃 · 番茄钟
 
-[![Android CI](https://github.com/ONEmengred/MindBellPomodoro/actions/workflows/android.yml/badge.svg)](https://github.com/ONEmengred/MindBellPomodoro/actions/workflows/android.yml)
-[![Release](https://img.shields.io/github/v/release/ONEmengred/MindBellPomodoro)](https://github.com/ONEmengred/MindBellPomodoro/releases/latest)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+一个 Android 应用，里面放了两个互不相干的功能：正念铃和番茄钟。想用哪个用哪个，它们各记各的状态。
 
-一个安静的 Android 计时器，里面装了两个**互相独立**的功能：**正念铃** 和 **番茄钟**。
-吉祥物是一只叫 **奶蛙** 的黄色小家伙。
+图标是一只叫奶蛙的黄色小家伙。
 
-Kotlin + Jetpack Compose + Material 3，单模块工程，`minSdk 26` / `targetSdk 35` / `compileSdk 35`。
+Kotlin + Jetpack Compose + Material 3，单模块，minSdk 26 / targetSdk 35 / compileSdk 35。
 
-<p align="center">
-  <img src="docs/naiva-icon.png" width="200" alt="奶蛙图标">
-</p>
-
----
+<img src="docs/naiva-icon.png" width="200" alt="奶蛙图标">
 
 ## 下载
 
-到 [Releases](https://github.com/ONEmengred/MindBellPomodoro/releases/latest) 下 `MindBellPomodoro-1.0.3-release.apk`，直接装上就能用（Android 8.0 / API 26 及以上）。
+到 [Releases](https://github.com/ONEmengred/MindBellPomodoro/releases/latest) 下 `MindBellPomodoro-1.0.3-release.apk`，装上就能用，Android 8.0 及以上。
 
-> 不想装别人的包，也可以自己编译，见下面的「构建」。
-
----
+不想装现成的包可以自己编译，见文末。
 
 ## 功能
 
-### 模块 A · 正念铃（三个模式）
+正念铃有三个模式：
 
-| 模式 | 说明 |
-| --- | --- |
-| **定时提醒** | 固定间隔（5/10/15/20/25/30/60 分钟预设，或自定义 1–180 分钟）提醒，可设每日启用时段与免打扰时段 |
-| **冥想练习** | 自定义练习时长，开始铃 / 间隔铃 / 结束铃，开始前准备时间，可提前结束，记录实际练习时长 |
-| **正念盲盒** | 在「最短–最长」分钟之间随机抽一个时长，静候铃响 → 响铃 → 觉察呼吸 → 重新抽；可设会话总上限、盲盒模式（隐藏倒计时） |
+- 定时提醒：按固定间隔提醒（5/10/15/20/25/30/60 分钟预设，或自己填 1–180 分钟），可以限定每天哪段时间才提醒、哪段时间不打扰。
+- 冥想练习：设一个总时长，配开始铃、间隔铃、结束铃和开始前的准备时间，中途可以提前结束，练完会记下实际练了多久。
+- 正念盲盒：在最短和最长分钟之间随机抽一个时长，到点响铃，然后进入几分钟的觉察呼吸，呼吸结束再抽下一次。可以设整场练习的上限，也可以开盲盒模式把倒计时数字藏起来。
 
-三个模式都支持开始 / 暂停 / 继续 / 停止，铃声、音量、振动可调。
+三个模式都支持开始、暂停、继续、停止，铃声、音量、振动都能调。
 
-### 模块 B · 番茄钟
+番茄钟就是常见的那套：专注 25、短休息 5、长休息 15，都能改；可以设几个番茄之后进长休息、要不要自动进入下一阶段、当前在做什么任务；结束时响铃、发通知、振动，并记下番茄数和专注时长。
 
-专注 25 / 短休息 5 / 长休息 15（都可改），可设几个番茄后长休息、是否自动进入下一阶段、当前任务名，结束时铃声 + 通知 + 振动，记录番茄数与专注时长。
+统计页有累计的冥想时长、番茄数、专注总时长，以及一条条历史记录。所有设置和历史都存在本机（DataStore + Room），不联网、不用账号。
 
-### 其他
+所有时间都能直接输入数字改，不用一直点加减号。
 
-- 统计页：累计冥想时长、番茄数、专注总时长，以及逐条历史记录
-- 全部设置与历史**本地保存**（DataStore + Room），不联网、无账号
-- 所有时长都能**直接输入数字**，不用狂点加减号
+## 几个实现上的选择
 
----
+**计时只存时间戳。** 不存「还剩多少秒」，只存结束时刻、下次响铃时刻这些绝对时间点，每秒拿当前时间比一下。所以进程被杀、手机重启、锁屏睡了半小时，醒来算一次就回到正确位置，不会因为漏掉几秒而整体跑偏。
 
-## 声音是算出来的，不是素材
+**四类会话各自独立。** 定时提醒、冥想、正念盲盒、番茄钟在 DataStore 里各占一个 key，同时跑也不会互相覆盖。
 
-APK 里没有任何音频文件：风铃、颂钵、轻叮咚、寺院钟、木鱼、收尾钟声全部由
-`audio/ToneSynth.kt` 在运行时用正弦分音 + 升余弦包络 + 低通滤波实时合成（44.1 kHz / PCM16）。
-好处是体积小、没有版权问题，而且音色随时能调参数。
+**暂停是平移时间戳。** 暂停时记下暂停时刻，恢复时把这个会话所有未来的时间点统一往后推暂停的那段时长，暂停多久都吃不掉剩余时间。
 
-> 想换成真实录音，把文件放进 `app/src/main/res/raw/`（如 `temple_bell.ogg`），
-> `BellPlayer` 会优先播放它。
+**铃声是算出来的。** APK 里没有音频文件，风铃、颂钵、轻叮咚、寺院钟、木鱼、收尾钟声都由 `audio/ToneSynth.kt` 实时合成（正弦分音 + 升余弦包络 + 低通滤波，44.1 kHz / PCM16）。体积小，没有版权问题，音色也能随时改参数。想换成真实录音的话，把文件放进 `app/src/main/res/raw/`（比如 `temple_bell.ogg`），`BellPlayer` 会优先播它。
 
----
+**后台响铃做了三层。** Android 会冻结后台进程，Doze 会拖慢轮询，不少厂商 ROM 还会直接杀进程，所以准点响铃不能只靠一个每秒循环：
 
-## 计时为什么靠时间戳
+1. 前台服务每秒 tick，常驻通知里直接显示还剩多久（`专注 12:34`），盲盒模式下按设置隐藏数字。
+2. 每次 tick 之后把最近的待触发时刻交给 `AlarmManager.setAlarmClock`，它精确、不受 Doze 影响、进程被杀也会触发；失败时依次降级到 `setExactAndAllowWhileIdle`、`setAndAllowWhileIdle`。闹钟到点由 `AlarmReceiver` 补跑一次 tick，再排下一个。
+3. 每次铃响都发一条高优先级通知并振动，媒体音量小或者手机静音时不至于完全没感知。
 
-不存「还剩多少秒」，只存**绝对时间戳**（`phaseEndEpochMs` / `nextBellEpochMs` / `pendingBellEpochs`）。
-每秒只做「读时钟 → 比较 → 触发」，因此：
+反过来，如果某个铃在 App 被冻结期间早就该响了（迟到超过 20 秒），重新打开 App 时不会补响，只把状态推到正确位置。免得一进 App 被突然的一声铃吓到。
 
-- 进程被杀 → 服务 `START_STICKY` 重启后一算就准
-- 锁屏 / 休眠 → 醒来一算就准，错过的铃声会补响
-- 重启手机 → `BootReceiver` 恢复继续
+统计页顶部有一张自检卡片，列着通知权限、铃响渠道、精确闹钟、电池优化、媒体音量、后台服务是否在跑、闹钟排到几点、最近一次铃响和最近一次报错，还有最近十几行运行日志。不响的时候先看这里，或者点一下「10 秒后测试闹钟」把 App 退到后台，十秒后该响就说明整条通路是通的。
 
-四种场景（定时提醒 / 冥想 / 正念盲盒 / 番茄钟）各自在 DataStore 里占一个**独立 key**
-（`session_snapshot_<TYPE>`），所以可以同时跑而互不覆盖。
-
-暂停时记录 `pausedAtEpochMs`，恢复时把该会话所有未来时间戳统一加上暂停时长，暂停多久都不会吃掉剩余时间。
-
----
-
-## 目录结构
+## 目录
 
 ```
 app/src/main/java/com/mindfulfocus/
-├── MainActivity.kt              入口（通知权限）
+├── MainActivity.kt              入口
 ├── MindFocusApp.kt              Application，持有 AppContainer
 ├── AppContainer.kt              手写依赖容器
 ├── core/
-│   ├── SessionType.kt           会话类型 / 状态 / SessionSnapshot（核心状态模型）
-│   ├── Settings.kt              各模式设置 + 时间窗
-│   ├── TimerEngine.kt           ★计时大脑：纯函数，按时间戳推进并产生事件
-│   ├── DiagLog.kt               运行日志（落 diag.log），供自检页诊断后台
-│   └── SessionController.kt     命令入口：start/pause/resume/stop + 每秒 tickAll
+│   ├── SessionType.kt           会话类型、状态、SessionSnapshot
+│   ├── Settings.kt              各模式设置与时间窗
+│   ├── TimerEngine.kt           计时逻辑，纯函数，按时间戳推进并产生事件
+│   ├── DiagLog.kt               运行日志，落 diag.log
+│   └── SessionController.kt     start / pause / resume / stop 与每秒 tickAll
 ├── data/
 │   ├── AppDataStore.kt          设置与会话快照持久化
 │   └── History.kt               Room：冥想记录、番茄记录
 ├── audio/
-│   ├── ToneSynth.kt             实时合成所有铃声
-│   ├── BellPlayer.kt            SoundPool + 振动
-│   └── EasterEggPlayer.kt       彩蛋音效
+│   ├── ToneSynth.kt             实时合成铃声
+│   └── BellPlayer.kt            SoundPool 与振动
 ├── service/
-│   ├── TimerForegroundService.kt 前台服务，每秒 tick，常驻通知（带倒计时）
-│   ├── AlertNotifier.kt          通知渲染：常驻倒计时 + 每次铃响的提醒
-│   ├── AlarmScheduler.kt         精确闹钟（setAlarmClock）兜底 + 10 秒自检闹钟
-│   ├── AlarmReceiver.kt          闹钟到点补跑一次 tick
-│   └── BootReceiver.kt           开机恢复
+│   ├── TimerForegroundService.kt 前台服务，每秒 tick，常驻通知带倒计时
+│   ├── AlertNotifier.kt         通知
+│   ├── AlarmScheduler.kt        精确闹钟
+│   ├── AlarmReceiver.kt         闹钟到点补跑一次 tick
+│   └── BootReceiver.kt          开机恢复
 └── ui/
-    ├── AppRoot.kt               底部导航 + NavHost
-    ├── theme/Theme.kt           暖黄 / 白配色
+    ├── AppRoot.kt               底部导航与 NavHost
+    ├── theme/Theme.kt           配色
     ├── components/              倒计时环、分段标签、数字输入步进器
-    ├── diagnostics/             自检卡片：为什么没响
-    ├── bell/                    正念铃（定时提醒 / 冥想 / 正念盲盒）
+    ├── diagnostics/             自检卡片
+    ├── bell/                    正念铃
     ├── pomodoro/                番茄钟
     └── history/                 统计
 
-app/src/test/java/com/mindfulfocus/core/TimerEngineTest.kt   计时引擎单元测试（纯 JVM，14 个用例）
+app/src/test/java/com/mindfulfocus/core/TimerEngineTest.kt   计时逻辑单元测试，20 个用例
 ```
-
----
-
-## 后台提醒为什么不掉链子
-
-Android 会把后台进程冻结、Doze 会拖慢轮询、部分厂商 ROM 更是直接杀进程。所以「准点响铃」不靠单一的 `delay(1000)` 循环，而是三层冗余，任一层活着就够：
-
-1. **前台服务每秒 tick** —— 进程活着时最快，常驻通知里直接显示剩余倒计时（`专注 12:34`），盲盒模式下按设置隐藏数字。
-2. **精确闹钟兜底** —— 每次 tick 后把「最近一个待触发时刻」交给 `AlarmManager.setAlarmClock`（最可靠：精确、免 Doze、被 ROM 杀进程也照样触发；不可用时依次降级到 `setExactAndAllowWhileIdle` / `setAndAllowWhileIdle`）；即使 Doze 把循环冻住，闹钟也会在那一刻唤醒进程（`AlarmReceiver` 补跑一次 tick、弹出通知并重新排下一个闹钟）。
-3. **每次铃响都有通知** —— 所有铃声事件（定时提醒 / 冥想 / 盲盒 / 番茄钟阶段切换）都会发一条高优先级 heads-up 通知并振动，媒体音量小或静音时也不会漏。
-
-因为计时全部基于绝对时间戳，补跑/重复触发都是幂等的：晚到的闹钟只会把状态推进到正确位置，不会打乱计时。
-
-### 迟到的铃不补响
-
-反过来，如果一节课的铃在 App 被冻结 / 被杀期间早就该响了（迟到超过 20 秒），重新打开 App 时**不会补响**——状态照常推进、专注时长照常记账，只是不出声、也不计入「响铃次数」。这样重新进入 App 不会被突然的一声铃吓一跳。判定在 `TimerEngine.CATCH_UP_GRACE_MS`，准点铃（正常 tick 延迟远小于 20 秒）不受影响。
-
-### 铃不响？先看「自检」卡片
-
-统计页顶部有一张 **自检 · 为什么没响** 卡片（v1.0.2 起）。后台不响铃的原因有五六种，只看现象分不清是哪一种，所以这里逐项读出真实状态：通知权限、铃响渠道是否被关、精确闹钟是否允许、有没有被电池优化冻结、媒体音量、后台服务是否还在跑、已排定闹钟的时刻与剩余时间、最近一次铃响、最近一次报错，以及最近 15 行运行日志（`DiagLog` 写入 `files/diag.log`，被系统杀进程也留得下）。
-
-卡片上还能一键做三件事：**「10 秒后测试闹钟」**（把 App 退到后台，10 秒后应该响铃 + 弹通知，这一条就能验证整条后台通路）、发测试通知、以及跳到系统的通知 / 精确闹钟 / 电池优化设置页。
-
-
----
 
 ## 构建
 
-需要 JDK 17+ 与 Android SDK 35。
+需要 JDK 17 以上和 Android SDK 35。
 
 ```bash
-./gradlew :app:assembleDebug      # 打 debug APK
-./gradlew :app:assembleRelease    # 打签名 release APK（需要下面的签名配置）
-./gradlew :app:testDebugUnitTest  # 跑计时引擎单元测试
+./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease
+./gradlew :app:testDebugUnitTest
 ```
 
-仓库里没有 `gradle-wrapper.jar`（只提交了 `gradle-wrapper.properties` 里的版本号）。
-用命令行时直接 `gradle wrapper --gradle-version 8.9` 生成一次，或用系统装的 Gradle 8.9 跑。
+仓库里没放 `gradle-wrapper.jar`，只有版本号。用命令行时先 `gradle wrapper --gradle-version 8.9` 生成一次，或者直接用系统装的 Gradle 8.9。
 
-关键版本：AGP 8.7.2 / Kotlin 2.0.21 / Compose BOM 2024.10.01 / KSP 2.0.21-1.0.28 / Gradle 8.9。
+版本：AGP 8.7.2 / Kotlin 2.0.21 / Compose BOM 2024.10.01 / KSP 2.0.21-1.0.28 / Gradle 8.9。
 
-### 签名（发布包）
+### 签名
 
-签名文件不进仓库。要打 release 包，在工程根目录建一个 `keystore.properties`（已在 `.gitignore` 里排除）：
+签名文件不进仓库。要打 release 包，在工程根目录建一个 `keystore.properties`（已在 .gitignore 里排除）：
 
 ```properties
 storeFile=/绝对路径/release.jks
@@ -163,30 +112,18 @@ keyAlias=mindbell
 keyPassword=******
 ```
 
-没有这个文件也能正常构建，只是 `assembleRelease` 产出的是**未签名**包。
+没有这个文件也能构建，只是出来的 release 包没签名。
 
 ### CI
 
-`.github/workflows/android.yml`：每次 push / PR 到 `main` 都会用 Gradle 8.9 跑单元测试 + `assembleDebug`，
-并把 APK 与测试报告作为 artifact 上传。
+`.github/workflows/android.yml` 在每次 push 或 PR 到 main 时跑单元测试和 `assembleDebug`，把 APK 和测试报告作为 artifact 上传。
 
-想让它顺便产出签名 release 包，在仓库 Settings → Secrets 里配好
-`KEYSTORE_BASE64`（keystore 文件的 base64 文本）、`KEYSTORE_STORE_PASSWORD`、`KEYSTORE_KEY_ALIAS`、
-`KEYSTORE_KEY_PASSWORD`，工作流会自动启用这一步。
-
----
+想让 CI 顺便产出签名的 release 包，去仓库 Settings → Secrets 配 `KEYSTORE_BASE64`（keystore 文件的 base64 文本）、`KEYSTORE_STORE_PASSWORD`、`KEYSTORE_KEY_ALIAS`、`KEYSTORE_KEY_PASSWORD`，工作流会自动多跑一步。
 
 ## 状态
 
-在本机用 JDK 21 + Android SDK 35 + Gradle 8.9 编译通过：`assembleDebug`、`assembleRelease`、
-`testDebugUnitTest`（14 个用例）全部通过，release APK 已用独立 keystore 签名并发布到 Releases。
-
----
+本机用 JDK 21 + Android SDK 35 + Gradle 8.9 编译通过，`assembleDebug`、`assembleRelease`、`testDebugUnitTest`（20 个用例）都没问题，release 包用独立 keystore 签名后发在 Releases。
 
 ## 许可
 
 [MIT](LICENSE) © 2026 ONEmeng
-
-欢迎拿去改、拿去用，也欢迎提 Issue / PR。
-
-> 顺带说一句：App 里藏了一个小彩蛋，自己找找看 🙂
