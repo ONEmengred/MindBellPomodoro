@@ -17,7 +17,7 @@ Kotlin + Jetpack Compose + Material 3，单模块工程，`minSdk 26` / `targetS
 
 ## 下载
 
-到 [Releases](https://github.com/ONEmengred/MindBellPomodoro/releases/latest) 下 `MindBellPomodoro-1.0.2-release.apk`，直接装上就能用（Android 8.0 / API 26 及以上）。
+到 [Releases](https://github.com/ONEmengred/MindBellPomodoro/releases/latest) 下 `MindBellPomodoro-1.0.3-release.apk`，直接装上就能用（Android 8.0 / API 26 及以上）。
 
 > 不想装别人的包，也可以自己编译，见下面的「构建」。
 
@@ -122,7 +122,11 @@ Android 会把后台进程冻结、Doze 会拖慢轮询、部分厂商 ROM 更�
 2. **精确闹钟兜底** —— 每次 tick 后把「最近一个待触发时刻」交给 `AlarmManager.setAlarmClock`（最可靠：精确、免 Doze、被 ROM 杀进程也照样触发；不可用时依次降级到 `setExactAndAllowWhileIdle` / `setAndAllowWhileIdle`）；即使 Doze 把循环冻住，闹钟也会在那一刻唤醒进程（`AlarmReceiver` 补跑一次 tick、弹出通知并重新排下一个闹钟）。
 3. **每次铃响都有通知** —— 所有铃声事件（定时提醒 / 冥想 / 盲盒 / 番茄钟阶段切换）都会发一条高优先级 heads-up 通知并振动，媒体音量小或静音时也不会漏。
 
-因为计时全部基于绝对时间戳，补跑/重复触发都是幂等的：晚到的闹钟只会把错过的铃声补上，不会打乱状态。
+因为计时全部基于绝对时间戳，补跑/重复触发都是幂等的：晚到的闹钟只会把状态推进到正确位置，不会打乱计时。
+
+### 迟到的铃不补响
+
+反过来，如果一节课的铃在 App 被冻结 / 被杀期间早就该响了（迟到超过 20 秒），重新打开 App 时**不会补响**——状态照常推进、专注时长照常记账，只是不出声、也不计入「响铃次数」。这样重新进入 App 不会被突然的一声铃吓一跳。判定在 `TimerEngine.CATCH_UP_GRACE_MS`，准点铃（正常 tick 延迟远小于 20 秒）不受影响。
 
 ### 铃不响？先看「自检」卡片
 

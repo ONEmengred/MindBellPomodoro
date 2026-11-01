@@ -172,8 +172,9 @@ class TimerEngineTest {
         val settings = RandomMindfulSettings(minMinutes = 3f, maxMinutes = 5f, capMinutes = 1)
         val snap = TimerEngine.startRandomMindful(settings, base, Random(3))
 
+        // Tick right at the cap so the closing bell is on time (a late one stays silent).
         val result = TimerEngine.tick(
-            snap, base + 2 * minute, Random(3), randomSettings = settings
+            snap, base + 1 * minute, Random(3), randomSettings = settings
         )
         assertTrue(result.events.any { it is TimerEvent.CloseBell })
         assertTrue(result.events.any { it == TimerEvent.Finished })
@@ -182,6 +183,17 @@ class TimerEngineTest {
         assertEquals(0L, result.snapshot.phaseEndEpochMs)
         // Focus time is capped at the session cap.
         assertEquals(1 * minute, result.snapshot.focusMs(base + 2 * minute))
+    }
+
+    @Test
+    fun blindBox_missedCapFinishesSilently() {
+        val settings = RandomMindfulSettings(minMinutes = 3f, maxMinutes = 5f, capMinutes = 1)
+        val snap = TimerEngine.startRandomMindful(settings, base, Random(3))
+        // Reopened 10 minutes late: the session ends, but without a closing bell.
+        val r = TimerEngine.tick(snap, base + 10 * minute, Random(3), randomSettings = settings)
+        assertTrue(r.events.none { it is TimerEvent.CloseBell })
+        assertTrue(r.events.any { it == TimerEvent.Finished })
+        assertEquals(RunStatus.IDLE, r.snapshot.status)
     }
 
     @Test
@@ -249,5 +261,81 @@ class TimerEngineTest {
         val r = TimerEngine.tick(snap, base + 10 * minute, intervalSettings = settings)
         val ring = r.events.filterIsInstance<TimerEvent.Ring>().single()
         assertEquals(SessionType.INTERVAL_BELL, ring.type)
+    }
+
+    // ------------------------------------------------------------------
+    // 迟到的铃不补响：重新打开 App 时不该突然响一声
+    // ------------------------------------------------------------------
+
+    @Test
+    fun intervalBell_missedWhileClosed_staysSilentButReschedules() {
+        val settings = IntervalBellSettings(intervalMinutes = 10, enabledActiveWindow = false, enabledDnd = false)
+        val snap = TimerEngine.startIntervalBell(settings, base)
+        val due = snap.nextBellEpochMs
+
+        // App was gone for 5 minutes past the bell, then reopened.
+        val reopened = TimerEngine.tick(
+            snap, due + 5 * minute, intervalSettings = settings
+        )
+        assertTrue("迟到的铃不应该响", reopened.events.isEmpty())
+        // ...but the schedule still advances, so the next bell is on time.
+        assertEquals(due + 5 * minute + 10 * minute, reopened.snapshot.nextBellEpochMs)
+    }
+
+    @Test
+    fun intervalBell_freshTickStillRings() {
+        val settings = IntervalBellSettings(intervalMinutes = 10, enabledActiveWindow = false, enabledDnd = false)
+        val snap = TimerEngine.startIntervalBell(settings, base)
+        val due = snap.nextBellEpochMs
+        // A tenth of a second late is a normal tick, not a catch-up.
+        val r = TimerEngine.tick(snap, due + 100L, intervalSettings = settings)
+        assertEquals(1, r.events.filterIsInstance<TimerEvent.Ring>().size)
+    }
+
+    @Test
+    fun blindBox_missedFocusEnd_advancesSilentlyAndIsNotCounted() {
+        val settings = RandomMindfulSettings(minMinutes = 3f, maxMinutes = 5f, restSeconds = 10)
+        val snap = TimerEngine.startRandomMindful(settings, base, Random(7))
+        val phaseEnd = snap.phaseEndEpochMs
+
+        // Reopened 3 minutes after the bell was due.
+        val r = TimerEngine.tick(snap, phaseEnd + 3 * minute, Random(7), randomSettings = settings)
+        assertTrue("迟到的盲盒铃不应该响", r.events.none { it is TimerEvent.BlindBell })
+        // Ring count must not include a bell the user never heard.
+        assertEquals(0, r.snapshot.bellCount)
+        // Focus time is still banked — the clock is real even if the sound was skipped.
+        assertEquals(snap.phaseTotalMs, r.snapshot.focusAccumulatedMs)
+    }
+
+    @Test
+    fun pomodoro_missedPhaseEnd_isSilentButSwitchesPhase() {
+        val settings = PomodoroSettings(focusMinutes = 25, autoStartNextPhase = false)
+        val snap = TimerEngine.startPomodoro(settings, base)
+        val phaseEnd = snap.phaseEndEpochMs
+
+        val r = TimerEngine.tick(snap, phaseEnd + 10 * minute, pomodoroSettings = settings)
+        assertTrue(r.events.none { it is TimerEvent.Ring })
+        // The phase change itself is a state fact, not a sound — it must still be reported.
+        assertTrue(r.events.any { it is TimerEvent.PhaseChanged })
+        assertEquals(1, r.snapshot.completedPomodoros)
+    }
+
+    @Test
+    fun meditation_missedEndBellIsSilentButStillFinishes() {
+        val settings = MeditationSettings(
+            sessionMinutes = 10,
+            prepSeconds = 0,
+            intervalBellMinutes = 0,
+            startBell = false,
+            intervalBell = false,
+            endBell = true
+        )
+        val snap = TimerEngine.startMeditation(settings, base)
+        val r = TimerEngine.tick(
+            snap, snap.phaseEndEpochMs + 30 * minute, meditationEndBell = true, medSound = null
+        )
+        assertTrue(r.events.none { it is TimerEvent.Ring })
+        assertTrue(r.events.any { it == TimerEvent.Finished })
+        assertEquals(RunStatus.IDLE, r.snapshot.status)
     }
 }

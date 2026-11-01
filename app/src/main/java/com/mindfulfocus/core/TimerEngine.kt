@@ -46,6 +46,21 @@ object TimerEngine {
 
     private const val MINUTE = 60_000L
 
+    /**
+     * 只有「准点」的铃才会响。
+     *
+     * 一个本该在 [CATCH_UP_GRACE_MS] 之前就响的铃，说明这期间进程被冻结 / 被杀 /
+     * 轮询停了 —— 用户此刻多半刚把 App 重新打开，突然补响一串铃只会吓人一跳。
+     * 这种迟到的铃一律静默跳过：状态照常往前推进（时间、统计都对），只是不出声。
+     * 正常运行时 tick 每秒一次，准点铃的延迟远小于这个值，所以不会被误杀。
+     */
+    const val CATCH_UP_GRACE_MS = 20_000L
+
+    /** True if a bell due at [dueEpochMs] was missed rather than freshly due. */
+    private fun isStale(dueEpochMs: Long, now: Long): Boolean =
+        dueEpochMs > 0L && now - dueEpochMs > CATCH_UP_GRACE_MS
+
+
     // ------------------------------------------------------------------
     // Shared helpers
     // ------------------------------------------------------------------
@@ -347,7 +362,7 @@ object TimerEngine {
             s.nextBellEpochMs, settings.activeWindow, settings.enabledActiveWindow,
             settings.doNotDisturb, settings.enabledDnd
         )
-        if (!isSuppressed) {
+        if (!isSuppressed && !isStale(s.nextBellEpochMs, now)) {
             events.add(TimerEvent.Ring(SessionType.INTERVAL_BELL, ring.first, ring.second, ring.third))
         }
         val next = nextAllowedTime(
@@ -368,13 +383,19 @@ object TimerEngine {
         // Fire any interval bells that are due.
         val stillPending = mutableListOf<Long>()
         for (bellEpoch in s.pendingBellEpochs) {
-            if (bellEpoch <= now) events.add(TimerEvent.Ring(SessionType.MEDITATION, sound.first, sound.second, sound.third))
-            else stillPending.add(bellEpoch)
+            if (bellEpoch <= now) {
+                // Missed while the process was frozen/killed — skip the sound entirely.
+                if (!isStale(bellEpoch, now)) {
+                    events.add(TimerEvent.Ring(SessionType.MEDITATION, sound.first, sound.second, sound.third))
+                }
+            } else stillPending.add(bellEpoch)
         }
         var updated = s.copy(pendingBellEpochs = stillPending)
         // End of sitting?
         if (s.phaseEndEpochMs in 1L..now) {
-            if (endBell) events.add(TimerEvent.Ring(SessionType.MEDITATION, sound.first, sound.second, sound.third))
+            if (endBell && !isStale(s.phaseEndEpochMs, now)) {
+                events.add(TimerEvent.Ring(SessionType.MEDITATION, sound.first, sound.second, sound.third))
+            }
             events.add(TimerEvent.Finished)
             updated = updated.copy(
                 status = RunStatus.IDLE,
@@ -424,7 +445,7 @@ object TimerEngine {
             // Reached the session cap inside (or exactly at the end of) this phase?
             if (capEpoch <= now && capEpoch <= phaseEnd) {
                 snap = finishBlindBox(snap, capEpoch, capMs)
-                events.add(TimerEvent.CloseBell(ring.second))
+                if (!isStale(capEpoch, now)) events.add(TimerEvent.CloseBell(ring.second))
                 events.add(TimerEvent.Finished)
                 break
             }
@@ -433,7 +454,10 @@ object TimerEngine {
             // Phase boundary reached — advance the machine.
             snap = when (snap.randomPhase) {
                 RandomPhase.FOCUS -> {
-                    events.add(TimerEvent.BlindBell(ring.first, ring.second, ring.third))
+                    // A late bell (app was killed / frozen) advances the phase silently, and
+                    // is not counted as a bell the user actually heard.
+                    val fresh = !isStale(phaseEnd, now)
+                    if (fresh) events.add(TimerEvent.BlindBell(ring.first, ring.second, ring.third))
                     val restMs = settings.restSeconds.coerceIn(
                         RandomMindfulSettings.MIN_REST_SECONDS,
                         RandomMindfulSettings.MAX_REST_SECONDS
@@ -441,8 +465,8 @@ object TimerEngine {
                     snap.copy(
                         randomPhase = RandomPhase.REST,
                         focusAccumulatedMs = snap.focusAccumulatedMs + snap.phaseTotalMs,
-                        bellCount = snap.bellCount + 1,
-                        bellFlashAtEpochMs = phaseEnd,
+                        bellCount = if (fresh) snap.bellCount + 1 else snap.bellCount,
+                        bellFlashAtEpochMs = if (fresh) phaseEnd else snap.bellFlashAtEpochMs,
                         phaseTotalMs = restMs,
                         phaseEndEpochMs = phaseEnd + restMs
                     )
@@ -489,7 +513,10 @@ object TimerEngine {
         if (s.phaseEndEpochMs <= 0L || now < s.phaseEndEpochMs) return TickResult(s, emptyList())
 
         val events = mutableListOf<TimerEvent>()
-        events.add(TimerEvent.Ring(SessionType.POMODORO, sound.first, sound.second, sound.third))
+        // Only a punctual ring makes a sound; a phase end found hours later is silent.
+        if (!isStale(s.phaseEndEpochMs, now)) {
+            events.add(TimerEvent.Ring(SessionType.POMODORO, sound.first, sound.second, sound.third))
+        }
 
         val finishedPhase = s.pomodoroPhase
         val completed = if (finishedPhase == PomodoroPhase.FOCUS) s.completedPomodoros + 1 else s.completedPomodoros
