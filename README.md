@@ -1,5 +1,9 @@
 # 正念铃 · 番茄钟（MindBellPomodoro）
 
+[![Android CI](https://github.com/ONEmengred/MindBellPomodoro/actions/workflows/android.yml/badge.svg)](https://github.com/ONEmengred/MindBellPomodoro/actions/workflows/android.yml)
+[![Release](https://img.shields.io/github/v/release/ONEmengred/MindBellPomodoro)](https://github.com/ONEmengred/MindBellPomodoro/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 一个安静的 Android 计时器，里面装了两个**互相独立**的功能：**正念铃** 和 **番茄钟**。
 吉祥物是一只叫 **奶蛙** 的黄色小家伙。
 
