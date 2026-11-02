@@ -2,7 +2,7 @@
 
 一个 Android 应用，里面放了两个互不相干的功能：正念铃和番茄钟。想用哪个用哪个，它们各记各的状态。
 
-图标是一只叫奶蛙的黄色小家伙。
+图标是一只奶蛙
 
 Kotlin + Jetpack Compose + Material 3，单模块，minSdk 26 / targetSdk 35 / compileSdk 35。
 
