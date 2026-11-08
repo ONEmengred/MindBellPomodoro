@@ -22,17 +22,28 @@ data class MeditationRecord(
     val completed: Boolean
 )
 
-/** One finished (or early-ended) pomodoro focus/break phase. */
+/**
+ * One finished (or early-ended) pomodoro focus/break phase.
+ *
+ * Also used for mindful blind-box focus, which is stored with [phase] = [PHASE_MINDFUL]
+ * so the "专注总时长" statistic counts it without needing a database migration
+ * (adding a table would bump the schema version and wipe existing history).
+ */
 @Entity(tableName = "pomodoro_records")
 data class PomodoroRecord(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val startedAtEpochMs: Long,
-    /** FOCUS / SHORT_BREAK / LONG_BREAK name. */
+    /** FOCUS / SHORT_BREAK / LONG_BREAK / MINDFUL. */
     val phase: String,
     val focusedMs: Long,
     val completed: Boolean,
     val taskName: String = ""
-)
+) {
+    companion object {
+        const val PHASE_FOCUS = "FOCUS"
+        const val PHASE_MINDFUL = "MINDFUL"
+    }
+}
 
 @Dao
 interface HistoryDao {
@@ -54,7 +65,7 @@ interface HistoryDao {
     @Query("SELECT COUNT(*) FROM pomodoro_records WHERE phase = 'FOCUS' AND completed = 1")
     fun observeCompletedPomodoroCount(): Flow<Int>
 
-    @Query("SELECT COALESCE(SUM(focusedMs), 0) FROM pomodoro_records WHERE phase = 'FOCUS'")
+    @Query("SELECT COALESCE(SUM(focusedMs), 0) FROM pomodoro_records WHERE phase IN ('FOCUS', 'MINDFUL')")
     fun observeTotalFocusMs(): Flow<Long>
 
     @Query("DELETE FROM meditation_records")

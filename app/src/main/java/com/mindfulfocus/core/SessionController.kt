@@ -10,6 +10,8 @@ import com.mindfulfocus.data.MeditationRecord
 import com.mindfulfocus.data.PomodoroRecord
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.random.Random
 
 /**
@@ -34,6 +36,15 @@ class SessionController(
     // ---------- observed state ----------
     fun observeSession(type: SessionType): Flow<SessionSnapshot> = store.observeSession(type)
     fun observeAllSessions(): Flow<Map<SessionType, SessionSnapshot>> = store.observeAllSessions()
+
+    /**
+     * Serialises everything that both reads and writes snapshots.
+     *
+     * The 1s service loop and [com.mindfulfocus.service.AlarmReceiver] can call
+     * [tickAll] at the same instant; without this lock both would see the same
+     * RUNNING snapshot and bank the same phase twice (double bell + double history row).
+     */
+    private val mutex = Mutex()
 
     val intervalBellSettings get() = store.observeIntervalBellSettings()
     val meditationSettings get() = store.observeMeditationSettings()
@@ -92,10 +103,10 @@ class SessionController(
         store.saveSession(TimerEngine.resume(s, now()))
     }
 
-    suspend fun stop(type: SessionType) {
+    suspend fun stop(type: SessionType) = mutex.withLock {
         val s = store.session(type)
-        // Record partial session history before wiping.
-        recordHistoryOnStop(s)
+        // Bank whatever was really practised before the snapshot is wiped.
+        recordDrafts(SessionAccounting.draftsForStop(s, now()))
         store.saveSession(TimerEngine.stop(s))
     }
 
@@ -105,7 +116,7 @@ class SessionController(
      * service can refresh notifications. Safe to call once per second and after
      * returning to foreground.
      */
-    suspend fun tickAll(): List<TimerEvent> {
+    suspend fun tickAll(): List<TimerEvent> = mutex.withLock {
         val t = now()
         val all = store.observeAllSessions().firstValue()
         val out = mutableListOf<TimerEvent>()
@@ -151,10 +162,12 @@ class SessionController(
             }
 
             if (result.snapshot != snap) store.saveSession(result.snapshot)
+            // 记账必须用 tick 之前的快照：引擎重置会话后，真实时长就只剩事件里那一份了。
+            recordDrafts(SessionAccounting.draftsForTick(snap, result))
             result.events.forEach { deliver(it) }
             out.addAll(result.events)
         }
-        return out
+        out
     }
 
     /** Preview a blind-box sound from the settings screen (点选即试听). */
@@ -175,50 +188,36 @@ class SessionController(
             is TimerEvent.CloseBell -> {
                 try { synth.playClose(event.volumePercent) } catch (e: Exception) { Log.w("ToneSynth", "close failed", e) }
             }
-            is TimerEvent.PhaseChanged, TimerEvent.Finished -> { /* history handled below */ }
+            is TimerEvent.PhaseChanged, is TimerEvent.Finished -> { /* history is written by recordDrafts */ }
         }
     }
 
-    /** Persist a finished meditation sitting (called by service when it sees Finished + was MEDITATION). */
-    suspend fun recordFinishedMeditation(snapshot: SessionSnapshot) {
-        if (snapshot.type != SessionType.MEDITATION) return
-        // Try to reconstruct real durations from the just-finished snapshot.
-        val settings = store.observeMeditationSettings().firstValue()
-        val planned = settings.sessionMinutes * 60_000L
-        history.insertMeditation(
-            MeditationRecord(
-                startedAtEpochMs = now() - planned,
-                practicedMs = planned,
-                plannedMs = planned,
-                completed = true
+    /** Write exactly what [SessionAccounting] decided, nothing inferred from settings. */
+    private suspend fun recordDrafts(drafts: HistoryDrafts) {
+        if (drafts.isEmpty) return
+        for (d in drafts.meditations) {
+            history.insertMeditation(
+                MeditationRecord(
+                    startedAtEpochMs = d.startedAtEpochMs,
+                    practicedMs = d.practicedMs,
+                    plannedMs = d.plannedMs,
+                    completed = d.completed
+                )
             )
-        )
-    }
-
-    private suspend fun recordHistoryOnStop(snap: SessionSnapshot) {
-        val elapsed = snap.elapsedMs(now())
-        when (snap.type) {
-            SessionType.MEDITATION -> if (elapsed > 0) {
-                history.insertMeditation(
-                    MeditationRecord(
-                        startedAtEpochMs = now() - elapsed,
-                        practicedMs = elapsed,
-                        plannedMs = snap.phaseTotalMs,
-                        completed = false
-                    )
+        }
+        for (f in drafts.focuses) {
+            history.insertPomodoro(
+                PomodoroRecord(
+                    startedAtEpochMs = f.startedAtEpochMs,
+                    phase = if (f.origin == FocusOrigin.POMODORO) {
+                        PomodoroRecord.PHASE_FOCUS
+                    } else {
+                        PomodoroRecord.PHASE_MINDFUL
+                    },
+                    focusedMs = f.focusedMs,
+                    completed = f.completed
                 )
-            }
-            SessionType.POMODORO -> if (elapsed > 0) {
-                history.insertPomodoro(
-                    PomodoroRecord(
-                        startedAtEpochMs = now() - elapsed,
-                        phase = snap.pomodoroPhase.name,
-                        focusedMs = elapsed,
-                        completed = false
-                    )
-                )
-            }
-            else -> {}
+            )
         }
     }
 }
