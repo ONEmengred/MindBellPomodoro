@@ -110,8 +110,9 @@ class SessionAccountingTest {
             intervalMinutes = 10, enabledActiveWindow = false, enabledDnd = false
         )
         val snap = TimerEngine.startIntervalBell(settings, base)
-        val result = TimerEngine.tick(snap, base + 30 * minute, intervalSettings = settings)
-        assertTrue(result.events.isNotEmpty())
+        // 刚到点就该响一声（迟到超过 20s 的铃按设计不补响，所以这里卡准时刻）。
+        val result = TimerEngine.tick(snap, base + 10 * minute, intervalSettings = settings)
+        assertTrue(result.events.any { it is TimerEvent.Ring })
         assertTrue(SessionAccounting.draftsForTick(snap, result).isEmpty)
     }
 
