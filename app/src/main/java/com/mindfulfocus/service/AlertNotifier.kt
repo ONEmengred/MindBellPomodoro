@@ -137,7 +137,8 @@ class AlertNotifier(private val context: Context) {
                 is TimerEvent.BlindBell -> ring("正念盲盒", "铃响了 —— 停下来，跟随呼吸")
                 is TimerEvent.CloseBell -> ring("正念盲盒", "这次练习结束了")
                 is TimerEvent.PhaseChanged -> ring("番茄钟", phaseText(event.to))
-                TimerEvent.Finished -> Unit
+                // The end bell / closing chime already carries the copy the user sees.
+                is TimerEvent.Finished -> Unit
             }
         }
     }

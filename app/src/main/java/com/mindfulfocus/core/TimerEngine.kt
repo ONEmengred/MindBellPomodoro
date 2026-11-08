@@ -29,8 +29,23 @@ sealed interface TimerEvent {
     /** Pomodoro phase transitioned; used to update the persistent notification text. */
     data class PhaseChanged(val from: PomodoroPhase, val to: PomodoroPhase) : TimerEvent
 
-    /** A sitting / pomodoro run finished (always accompanied by a Ring for the end bell). */
-    data object Finished : TimerEvent
+    /**
+     * A sitting / blind-box run finished on its own (a pomodoro phase end uses
+     * [PhaseChanged] instead).
+     *
+     * The payload exists so the caller can write an exact history row: by the time the
+     * event is delivered the snapshot has already been reset to IDLE, so the durations
+     * are only knowable here. See [SessionAccounting].
+     */
+    data class Finished(
+        val type: SessionType,
+        /** Really practised time: sitting time without prep (meditation), focus time (blind box). */
+        val practicedMs: Long,
+        /** Planned length of the practice, 0 when the mode has no plan (blind box without cap). */
+        val plannedMs: Long,
+        /** Wall-clock epoch (ms) the practice began, pauses excluded. */
+        val startedAtEpochMs: Long
+    ) : TimerEvent
 }
 
 /** Result of a single tick: the (possibly advanced) snapshot plus events to deliver. */
@@ -158,7 +173,8 @@ object TimerEngine {
             phaseEndEpochMs = endEpoch,
             phaseTotalMs = prepMs + practiceMs,
             pendingBellEpochs = bells,
-            runStartedEpochMs = now
+            runStartedEpochMs = now,
+            prepMs = prepMs
         )
     }
 
@@ -396,7 +412,18 @@ object TimerEngine {
             if (endBell && !isStale(s.phaseEndEpochMs, now)) {
                 events.add(TimerEvent.Ring(SessionType.MEDITATION, sound.first, sound.second, sound.third))
             }
-            events.add(TimerEvent.Finished)
+            // Only the sitting itself counts as practice — the prep countdown does not.
+            val elapsed = s.elapsedMs(s.phaseEndEpochMs).coerceAtLeast(0L)
+            val prepMs = s.prepMs.coerceIn(0L, s.phaseTotalMs)
+            val practiceMs = (s.phaseTotalMs - prepMs).coerceAtLeast(0L)
+            events.add(
+                TimerEvent.Finished(
+                    type = SessionType.MEDITATION,
+                    practicedMs = (elapsed - prepMs).coerceIn(0L, practiceMs),
+                    plannedMs = practiceMs,
+                    startedAtEpochMs = s.phaseEndEpochMs - elapsed
+                )
+            )
             updated = updated.copy(
                 status = RunStatus.IDLE,
                 elapsedAccumulatedMs = s.elapsedMs(s.phaseEndEpochMs),
@@ -446,7 +473,14 @@ object TimerEngine {
             if (capEpoch <= now && capEpoch <= phaseEnd) {
                 snap = finishBlindBox(snap, capEpoch, capMs)
                 if (!isStale(capEpoch, now)) events.add(TimerEvent.CloseBell(ring.second))
-                events.add(TimerEvent.Finished)
+                events.add(
+                    TimerEvent.Finished(
+                        type = SessionType.RANDOM_MINDFUL,
+                        practicedMs = snap.focusAccumulatedMs,
+                        plannedMs = if (capMs > 0L) capMs else 0L,
+                        startedAtEpochMs = capEpoch - snap.elapsedAccumulatedMs
+                    )
+                )
                 break
             }
             if (now < phaseEnd) break

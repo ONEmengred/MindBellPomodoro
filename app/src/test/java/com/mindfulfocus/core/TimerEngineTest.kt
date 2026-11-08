@@ -68,7 +68,7 @@ class TimerEngineTest {
 
         // Tick at end: finished.
         val r = TimerEngine.tick(snap, base + 20 * minute, meditationEndBell = true)
-        assertTrue(r.events.any { it == TimerEvent.Finished })
+        assertTrue(r.events.any { it is TimerEvent.Finished })
         assertEquals(RunStatus.IDLE, r.snapshot.status)
     }
 
@@ -177,7 +177,7 @@ class TimerEngineTest {
             snap, base + 1 * minute, Random(3), randomSettings = settings
         )
         assertTrue(result.events.any { it is TimerEvent.CloseBell })
-        assertTrue(result.events.any { it == TimerEvent.Finished })
+        assertTrue(result.events.any { it is TimerEvent.Finished })
         assertEquals(RunStatus.IDLE, result.snapshot.status)
         assertEquals(RandomPhase.DONE, result.snapshot.randomPhase)
         assertEquals(0L, result.snapshot.phaseEndEpochMs)
@@ -192,7 +192,7 @@ class TimerEngineTest {
         // Reopened 10 minutes late: the session ends, but without a closing bell.
         val r = TimerEngine.tick(snap, base + 10 * minute, Random(3), randomSettings = settings)
         assertTrue(r.events.none { it is TimerEvent.CloseBell })
-        assertTrue(r.events.any { it == TimerEvent.Finished })
+        assertTrue(r.events.any { it is TimerEvent.Finished })
         assertEquals(RunStatus.IDLE, r.snapshot.status)
     }
 
@@ -335,7 +335,74 @@ class TimerEngineTest {
             snap, snap.phaseEndEpochMs + 30 * minute, meditationEndBell = true, medSound = null
         )
         assertTrue(r.events.none { it is TimerEvent.Ring })
-        assertTrue(r.events.any { it == TimerEvent.Finished })
+        assertTrue(r.events.any { it is TimerEvent.Finished })
         assertEquals(RunStatus.IDLE, r.snapshot.status)
+    }
+
+    // ------------------------------------------------------------------
+    // 结束事件自带真实时长：调用方不必再从设置里「猜」一遍
+    // ------------------------------------------------------------------
+
+    @Test
+    fun meditationFinished_carriesRealPracticeTimeWithoutPrep() {
+        val settings = MeditationSettings(
+            sessionMinutes = 10,
+            prepSeconds = 10,
+            intervalBellMinutes = 0,
+            startBell = false,
+            intervalBell = false,
+            endBell = true
+        )
+        val snap = TimerEngine.startMeditation(settings, base)
+        assertEquals(10_000L, snap.prepMs)
+        assertEquals(10 * minute + 10_000L, snap.phaseTotalMs)
+
+        val r = TimerEngine.tick(snap, snap.phaseEndEpochMs)
+        val finished = r.events.filterIsInstance<TimerEvent.Finished>().single()
+        assertEquals(SessionType.MEDITATION, finished.type)
+        // The 10s prep countdown must not be counted as practice.
+        assertEquals(10 * minute, finished.practicedMs)
+        assertEquals(10 * minute, finished.plannedMs)
+        assertEquals(base, finished.startedAtEpochMs)
+    }
+
+    @Test
+    fun meditationFinished_pausedTimeIsNotPracticed() {
+        val settings = MeditationSettings(
+            sessionMinutes = 10,
+            prepSeconds = 0,
+            intervalBellMinutes = 0,
+            startBell = false,
+            intervalBell = false,
+            endBell = true
+        )
+        val snap = TimerEngine.startMeditation(settings, base)
+        // Sit 5 minutes, pause for 15, resume, then let it end.
+        val paused = TimerEngine.pause(snap, base + 5 * minute)
+        val resumed = TimerEngine.resume(paused, base + 20 * minute)
+        val r = TimerEngine.tick(resumed, resumed.phaseEndEpochMs)
+        val finished = r.events.filterIsInstance<TimerEvent.Finished>().single()
+        assertEquals(10 * minute, finished.practicedMs)
+        assertEquals(10 * minute, finished.plannedMs)
+    }
+
+    @Test
+    fun blindBoxFinished_carriesFocusTimeAndCap() {
+        val settings = RandomMindfulSettings(minMinutes = 3f, maxMinutes = 5f, capMinutes = 1)
+        val snap = TimerEngine.startRandomMindful(settings, base, Random(3))
+        val r = TimerEngine.tick(snap, base + 1 * minute, Random(3), randomSettings = settings)
+        val finished = r.events.filterIsInstance<TimerEvent.Finished>().single()
+        assertEquals(SessionType.RANDOM_MINDFUL, finished.type)
+        assertEquals(1 * minute, finished.practicedMs)
+        assertEquals(1 * minute, finished.plannedMs)
+        assertEquals(base, finished.startedAtEpochMs)
+    }
+
+    @Test
+    fun intervalBell_producesNoFinishedEvent() {
+        val settings = IntervalBellSettings(intervalMinutes = 10, enabledActiveWindow = false, enabledDnd = false)
+        val snap = TimerEngine.startIntervalBell(settings, base)
+        val r = TimerEngine.tick(snap, base + 60 * minute, intervalSettings = settings)
+        assertTrue(r.events.none { it is TimerEvent.Finished })
     }
 }

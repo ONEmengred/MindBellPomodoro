@@ -68,6 +68,12 @@ data class SessionSnapshot(
     /** Length of the current countdown phase in ms (for progress bars). 0 when n/a. */
     val phaseTotalMs: Long = 0L,
 
+    /**
+     * Meditation only: how much of [phaseTotalMs] is the prep countdown, so the
+     * history can store the real sitting time instead of the whole planned block.
+     */
+    val prepMs: Long = 0L,
+
     /** When paused, how much of the current phase was left (ms). */
     val pausedRemainingMs: Long = 0L,
 

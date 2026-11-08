@@ -50,6 +50,12 @@ class TimerForegroundService : LifecycleService() {
     /** Epoch of the alarm currently armed, so we only re-arm when it actually moves. */
     private var scheduledTriggerEpochMs: Long = -1L
 
+    /** True once any session has been seen running: only then may the service retire itself. */
+    private var hasSeenWork = false
+
+    /** Consecutive ticks with nothing running — a short grace so quick mode switches don't bounce. */
+    private var idleTicks = 0
+
     override fun onCreate() {
         super.onCreate()
         notifier.ensureChannels()
@@ -69,24 +75,56 @@ class TimerForegroundService : LifecycleService() {
         tickJob?.cancel()
         tickJob = lifecycleScope.launch {
             while (isActive) {
+                var retire = false
                 try {
                     val events = controller.tickAll()
                     DiagLog.tick()
                     handleEvents(events)
                     refreshOngoing()
                     syncAlarm()
+                    retire = nothingLeftToTick()
                 } catch (e: Exception) {
                     // Never let one bad tick kill the loop — but do record why.
                     DiagLog.error("tick", e)
+                }
+                // Every session is done: drop the permanent notification and stop burning a
+                // wake-up per second. The alarm stays armed, so a later ring still arrives.
+                if (retire) {
+                    DiagLog.note("没有进行中的会话，前台服务自动停止")
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                    return@launch
                 }
                 delay(1000L)
             }
         }
     }
 
+    /**
+     * True once the last running session has ended. The service is only started for a
+     * session, so this does not fight with the "启动后台服务" self-check button (that
+     * path never sees a running session and is therefore left alone).
+     */
+    private suspend fun nothingLeftToTick(): Boolean {
+        val all = controller.observeAllSessions().first()
+        val active = all.values.any {
+            it.status == RunStatus.RUNNING ||
+                (it.status == RunStatus.PAUSED && it.elapsedAccumulatedMs > 0L)
+        }
+        if (active) {
+            hasSeenWork = true
+            idleTicks = 0
+            return false
+        }
+        if (!hasSeenWork) return false
+        idleTicks++
+        return idleTicks >= IDLE_STOP_TICKS
+    }
+
     private suspend fun handleEvents(events: List<TimerEvent>) {
         if (events.isEmpty()) return
         // Every ring / phase change / session end becomes a visible alert.
+        // (History is written by SessionController.tickAll, not here.)
         notifier.notifyForEvents(events)
         events.forEach { event ->
             when (event) {
@@ -94,16 +132,7 @@ class TimerForegroundService : LifecycleService() {
                 is TimerEvent.BlindBell -> DiagLog.ring("正念盲盒铃声")
                 is TimerEvent.CloseBell -> DiagLog.ring("盲盒收尾音")
                 is TimerEvent.PhaseChanged -> DiagLog.ring("番茄阶段 ${event.from}→${event.to}")
-                TimerEvent.Finished -> DiagLog.note("会话结束")
-            }
-        }
-        if (events.any { it == TimerEvent.Finished }) {
-            // Record meditation history if the finished session was meditation.
-            val all = controller.observeAllSessions().first()
-            all[SessionType.MEDITATION]?.let { snap ->
-                if (snap.status == RunStatus.IDLE && snap.phaseEndEpochMs == 0L) {
-                    controller.recordFinishedMeditation(snap)
-                }
+                is TimerEvent.Finished -> DiagLog.note("${event.type} 结束，练习 ${event.practicedMs / 1000L}s")
             }
         }
     }
@@ -194,6 +223,9 @@ class TimerForegroundService : LifecycleService() {
     }
 
     companion object {
+        /** How many idle ticks (~seconds) before the service stops itself. */
+        private const val IDLE_STOP_TICKS = 3
+
         fun start(context: Context) {
             val intent = Intent(context, TimerForegroundService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
