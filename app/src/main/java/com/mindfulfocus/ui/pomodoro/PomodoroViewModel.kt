@@ -3,13 +3,14 @@ package com.mindfulfocus.ui.pomodoro
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.mindfulfocus.core.PomodoroPhase
 import com.mindfulfocus.core.PomodoroSettings
 import com.mindfulfocus.core.RunStatus
 import com.mindfulfocus.core.SessionController
 import com.mindfulfocus.core.SessionSnapshot
 import com.mindfulfocus.core.SessionType
 import com.mindfulfocus.service.TimerForegroundService
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -22,9 +23,6 @@ class PomodoroViewModel(
 
     private val context = app.applicationContext
 
-    private val _taskName = kotlinx.coroutines.flow.MutableStateFlow("")
-    val taskName: StateFlow<String> = _taskName
-
     val settings: StateFlow<PomodoroSettings> =
         controller.pomodoroSettings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(2000), PomodoroSettings())
 
@@ -32,10 +30,25 @@ class PomodoroViewModel(
         controller.observeSession(SessionType.POMODORO)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(2000), SessionSnapshot(SessionType.POMODORO))
 
-    fun setTaskName(name: String) { _taskName.value = name }
+    private val _taskName = MutableStateFlow("")
+    val taskName: StateFlow<String> = _taskName
+    private var taskEdited = false
+
+    init {
+        viewModelScope.launch {
+            val saved = controller.observeSession(SessionType.POMODORO).first()
+            if (!taskEdited) _taskName.value = saved.taskName
+        }
+    }
+
+    fun setTaskName(name: String) {
+        taskEdited = true
+        _taskName.value = name
+        viewModelScope.launch { controller.setPomodoroTaskName(name) }
+    }
 
     fun updateSettings(block: (PomodoroSettings) -> PomodoroSettings) = viewModelScope.launch {
-        controller.savePomodoro(block(settings.value))
+        controller.updatePomodoroSettings(block)
     }
 
     fun start() = run {

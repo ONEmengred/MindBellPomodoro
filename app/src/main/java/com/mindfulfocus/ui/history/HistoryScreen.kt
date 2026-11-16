@@ -84,7 +84,8 @@ fun HistoryScreen(vm: HistoryViewModel) {
             HistoryLine(
                 title = if (r.completed) "完成专注" else "提前结束",
                 right = formatDuration(r.focusedMs),
-                time = formatTime(r.startedAtEpochMs)
+                time = formatTime(r.startedAtEpochMs),
+                taskName = r.taskName
             )
         }
 
@@ -108,11 +109,12 @@ private fun StatLine(label: String, value: String) {
 }
 
 @Composable
-private fun HistoryLine(title: String, right: String, time: String) {
+private fun HistoryLine(title: String, right: String, time: String, taskName: String = "") {
     Column {
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Column {
+            Column(Modifier.weight(1f).padding(end = 12.dp)) {
                 Text(title, style = MaterialTheme.typography.bodyMedium)
+                if (taskName.isNotBlank()) Text(taskName, style = MaterialTheme.typography.bodyMedium)
                 Text(time, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(right, style = MaterialTheme.typography.bodyMedium)

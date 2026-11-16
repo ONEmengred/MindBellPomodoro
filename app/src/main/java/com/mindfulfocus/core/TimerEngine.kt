@@ -24,10 +24,15 @@ sealed interface TimerEvent {
     ) : TimerEvent
 
     /** Play the low closing chime that marks the end of a blind-box session. */
-    data class CloseBell(val volumePercent: Int) : TimerEvent
+    data class CloseBell(val volumePercent: Int, val vibrate: Boolean = true) : TimerEvent
 
     /** Pomodoro phase transitioned; used to update the persistent notification text. */
-    data class PhaseChanged(val from: PomodoroPhase, val to: PomodoroPhase) : TimerEvent
+    data class PhaseChanged(
+        val from: PomodoroPhase,
+        val to: PomodoroPhase,
+        /** Only the optional phase alert; sound and vibration belong to Ring. */
+        val notify: Boolean = true
+    ) : TimerEvent
 
     /**
      * A sitting / blind-box run finished on its own (a pomodoro phase end uses
@@ -216,7 +221,7 @@ object TimerEngine {
     // Pomodoro
     // ------------------------------------------------------------------
 
-    fun startPomodoro(settings: PomodoroSettings, now: Long): SessionSnapshot {
+    fun startPomodoro(settings: PomodoroSettings, now: Long, taskName: String = ""): SessionSnapshot {
         val focusMs = settings.focusMinutes * MINUTE
         return SessionSnapshot(
             type = SessionType.POMODORO,
@@ -225,6 +230,7 @@ object TimerEngine {
             phaseTotalMs = focusMs,
             pomodoroPhase = PomodoroPhase.FOCUS,
             completedPomodoros = 0,
+            taskName = taskName,
             runStartedEpochMs = now,
             elapsedAccumulatedMs = 0L
         )
@@ -235,7 +241,8 @@ object TimerEngine {
         settings: PomodoroSettings,
         phase: PomodoroPhase,
         completedPomodoros: Int,
-        now: Long
+        now: Long,
+        taskName: String = ""
     ): SessionSnapshot {
         val lenMs = when (phase) {
             PomodoroPhase.FOCUS -> settings.focusMinutes * MINUTE
@@ -249,6 +256,7 @@ object TimerEngine {
             phaseTotalMs = lenMs,
             pomodoroPhase = phase,
             completedPomodoros = completedPomodoros,
+            taskName = taskName,
             runStartedEpochMs = now,
             elapsedAccumulatedMs = 0L
         )
@@ -312,7 +320,7 @@ object TimerEngine {
     }
 
     fun stop(snapshot: SessionSnapshot): SessionSnapshot =
-        SessionSnapshot(type = snapshot.type)
+        SessionSnapshot(type = snapshot.type, taskName = snapshot.taskName)
 
     // ------------------------------------------------------------------
     // Tick — the only place events are produced
@@ -472,7 +480,7 @@ object TimerEngine {
             // Reached the session cap inside (or exactly at the end of) this phase?
             if (capEpoch <= now && capEpoch <= phaseEnd) {
                 snap = finishBlindBox(snap, capEpoch, capMs)
-                if (!isStale(capEpoch, now)) events.add(TimerEvent.CloseBell(ring.second))
+                if (!isStale(capEpoch, now)) events.add(TimerEvent.CloseBell(ring.second, ring.third))
                 events.add(
                     TimerEvent.Finished(
                         type = SessionType.RANDOM_MINDFUL,
@@ -555,7 +563,10 @@ object TimerEngine {
         val finishedPhase = s.pomodoroPhase
         val completed = if (finishedPhase == PomodoroPhase.FOCUS) s.completedPomodoros + 1 else s.completedPomodoros
         val nextPhase = nextPomodoroPhase(settings, finishedPhase, completed)
-        events.add(TimerEvent.PhaseChanged(finishedPhase, nextPhase))
+        events.add(TimerEvent.PhaseChanged(
+            finishedPhase, nextPhase,
+            notify = settings.notify && !isStale(s.phaseEndEpochMs, now)
+        ))
 
         return if (settings.autoStartNextPhase) {
             val lenMs = when (nextPhase) {

@@ -19,7 +19,8 @@ data class FocusDraft(
     val startedAtEpochMs: Long,
     val focusedMs: Long,
     val completed: Boolean,
-    val origin: FocusOrigin
+    val origin: FocusOrigin,
+    val taskName: String = ""
 )
 
 /** [FocusDraft] 的来源，决定它落库时写哪个 phase 名。 */
@@ -95,7 +96,8 @@ object SessionAccounting {
                             startedAtEpochMs = (before.phaseEndEpochMs - focused).coerceAtLeast(0L),
                             focusedMs = focused,
                             completed = true,
-                            origin = FocusOrigin.POMODORO
+                            origin = FocusOrigin.POMODORO,
+                            taskName = before.taskName
                         )
                     }
 
@@ -148,7 +150,8 @@ object SessionAccounting {
                                 startedAtEpochMs = now - elapsed,
                                 focusedMs = elapsed.coerceAtMost(snapshot.phaseTotalMs.coerceAtLeast(0L)),
                                 completed = false,
-                                origin = FocusOrigin.POMODORO
+                                origin = FocusOrigin.POMODORO,
+                                taskName = snapshot.taskName
                             )
                         )
                     )

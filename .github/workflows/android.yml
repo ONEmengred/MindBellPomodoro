@@ -35,6 +35,9 @@ jobs:
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
 
+      - name: Lint debug
+        run: gradle :app:lintDebug --no-daemon --console=plain
+
       - name: Unit tests (timer engine)
         run: gradle :app:testDebugUnitTest --no-daemon --console=plain
 
@@ -76,6 +79,14 @@ jobs:
           name: MindBellPomodoro-release-apk
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.*
+          if-no-files-found: ignore
 
       - name: Upload test report
         if: always()

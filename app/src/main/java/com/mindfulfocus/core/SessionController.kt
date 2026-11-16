@@ -56,6 +56,8 @@ class SessionController(
     suspend fun saveMeditation(s: MeditationSettings) = store.saveMeditationSettings(s)
     suspend fun saveRandomMindful(s: RandomMindfulSettings) = store.saveRandomMindfulSettings(s)
     suspend fun savePomodoro(s: PomodoroSettings) = store.savePomodoroSettings(s)
+    suspend fun updatePomodoroSettings(block: (PomodoroSettings) -> PomodoroSettings) =
+        store.updatePomodoroSettings(block)
 
     // ---------- start commands ----------
     suspend fun startIntervalBell() {
@@ -78,27 +80,33 @@ class SessionController(
         store.saveSession(TimerEngine.startRandomMindful(s, now(), random))
     }
 
-    suspend fun startPomodoro() {
+    suspend fun setPomodoroTaskName(name: String) = mutex.withLock {
+        val snap = store.session(SessionType.POMODORO)
+        store.saveSession(snap.copy(taskName = name))
+    }
+
+    suspend fun startPomodoro() = mutex.withLock {
         val s = store.observePomodoroSettings().firstValue()
-        store.saveSession(TimerEngine.startPomodoro(s, now()))
+        val snap = store.session(SessionType.POMODORO)
+        store.saveSession(TimerEngine.startPomodoro(s, now(), snap.taskName))
     }
 
     /** Start the next pomodoro phase after a boundary pause. */
-    suspend fun startNextPomodoroPhase(type: SessionType = SessionType.POMODORO) {
-        val snap = store.session(type)
+    suspend fun startNextPomodoroPhase() = mutex.withLock {
+        val snap = store.session(SessionType.POMODORO)
         val settings = store.observePomodoroSettings().firstValue()
         store.saveSession(
-            TimerEngine.startPomodoroPhase(settings, snap.pomodoroPhase, snap.completedPomodoros, now())
+            TimerEngine.startPomodoroPhase(settings, snap.pomodoroPhase, snap.completedPomodoros, now(), snap.taskName)
         )
     }
 
     // ---------- pause / resume / stop ----------
-    suspend fun pause(type: SessionType) {
+    suspend fun pause(type: SessionType) = mutex.withLock {
         val s = store.session(type)
         store.saveSession(TimerEngine.pause(s, now()))
     }
 
-    suspend fun resume(type: SessionType) {
+    suspend fun resume(type: SessionType) = mutex.withLock {
         val s = store.session(type)
         store.saveSession(TimerEngine.resume(s, now()))
     }
@@ -187,6 +195,7 @@ class SessionController(
             }
             is TimerEvent.CloseBell -> {
                 try { synth.playClose(event.volumePercent) } catch (e: Exception) { Log.w("ToneSynth", "close failed", e) }
+                if (event.vibrate) try { vibration.vibrate() } catch (_: Exception) {}
             }
             is TimerEvent.PhaseChanged, is TimerEvent.Finished -> { /* history is written by recordDrafts */ }
         }
@@ -215,7 +224,8 @@ class SessionController(
                         PomodoroRecord.PHASE_MINDFUL
                     },
                     focusedMs = f.focusedMs,
-                    completed = f.completed
+                    completed = f.completed,
+                    taskName = f.taskName
                 )
             )
         }

@@ -114,6 +114,16 @@ class AppDataStore(private val context: Context) {
         }
 
     suspend fun savePomodoroSettings(settings: PomodoroSettings) {
-        context.dataStore.edit { it[pomodoroSettingsKey] = json.encodeToString(PomodoroSettings.serializer(), settings) }
+        updatePomodoroSettings { settings }
+    }
+
+    /** Transform the persisted value atomically, including rapid slider/switch edits. */
+    suspend fun updatePomodoroSettings(block: (PomodoroSettings) -> PomodoroSettings) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[pomodoroSettingsKey]?.let {
+                runCatching { json.decodeFromString(PomodoroSettings.serializer(), it) }.getOrNull()
+            } ?: PomodoroSettings()
+            prefs[pomodoroSettingsKey] = json.encodeToString(PomodoroSettings.serializer(), block(current))
+        }
     }
 }
