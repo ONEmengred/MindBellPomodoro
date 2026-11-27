@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -17,9 +16,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +28,8 @@ import com.mindfulfocus.core.SessionSnapshot
 import com.mindfulfocus.ui.components.CountdownRing
 import com.mindfulfocus.ui.components.RoundActionButton
 import com.mindfulfocus.ui.components.SettingRow
+import com.mindfulfocus.ui.bell.SoundPicker
+import com.mindfulfocus.ui.bell.VolumeSlider
 import com.mindfulfocus.ui.formatDuration
 import com.mindfulfocus.ui.rememberNow
 
@@ -130,6 +128,23 @@ fun PomodoroScreen(vm: PomodoroViewModel) {
                 SettingRow("自动进入下一阶段") {
                     Switch(checked = settings.autoStartNextPhase, onCheckedChange = { v ->
                         vm.updateSettings { s -> s.copy(autoStartNextPhase = v) }
+                    })
+                }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Text("阶段提醒", style = MaterialTheme.typography.titleSmall)
+                SoundPicker(settings.sound) { sound ->
+                    vm.updateSettings { s -> s.copy(sound = sound) }
+                }
+                VolumeSlider(settings.volumePercent) { volume ->
+                    vm.updateSettings { s -> s.copy(volumePercent = volume) }
+                }
+                SettingRow("阶段切换通知", subtitle = "计时中的常驻通知会保留；铃声和震动独立控制") {
+                    Switch(checked = settings.notify, onCheckedChange = { v ->
+                        vm.updateSettings { s -> s.copy(notify = v) }
                     })
                 }
                 SettingRow("震动") {

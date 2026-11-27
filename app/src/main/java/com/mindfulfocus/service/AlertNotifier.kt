@@ -56,8 +56,8 @@ class AlertNotifier(private val context: Context) {
                 description = "每一次铃响、阶段切换与练习结束的提醒"
                 setShowBadge(true)
                 setSound(null, null) // 铃声由 ToneSynth 合成播放，避免重复
-                enableVibration(true)
-                vibrationPattern = longArrayOf(0, 180, 120, 180)
+                // Haptics are delivered once by SessionController using each session's setting.
+                enableVibration(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
         )
@@ -90,7 +90,7 @@ class AlertNotifier(private val context: Context) {
         }
     }
 
-    /** Fire one visible + vibrating heads-up alert. */
+    /** Fire one visual heads-up alert; sound/haptics belong to the timer event. */
     fun ring(title: String, text: String) {
         wakeBriefly()
         post(
@@ -105,7 +105,7 @@ class AlertNotifier(private val context: Context) {
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setAutoCancel(true)
                 .setOnlyAlertOnce(false)
-                .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
+                .setDefaults(0)
                 .setContentIntent(openApp())
                 .build()
         )
@@ -136,7 +136,7 @@ class AlertNotifier(private val context: Context) {
                 }
                 is TimerEvent.BlindBell -> ring("正念盲盒", "铃响了 —— 停下来，跟随呼吸")
                 is TimerEvent.CloseBell -> ring("正念盲盒", "这次练习结束了")
-                is TimerEvent.PhaseChanged -> ring("番茄钟", phaseText(event.to))
+                is TimerEvent.PhaseChanged -> if (event.notify) ring("番茄钟", phaseText(event.to))
                 // The end bell / closing chime already carries the copy the user sees.
                 is TimerEvent.Finished -> Unit
             }
@@ -179,7 +179,8 @@ class AlertNotifier(private val context: Context) {
 
     companion object {
         const val CH_ONGOING = "timer_ongoing"
-        const val CH_ALERT = "timer_alert_v2"
+        // Channel vibration is immutable after creation: use a new silent channel for upgrades.
+        const val CH_ALERT = "timer_alert_v3"
         const val ID_ONGOING = 1001
         const val ID_ALERT = 1002
         const val EXTRA_FROM_ALERT = "from_alert"

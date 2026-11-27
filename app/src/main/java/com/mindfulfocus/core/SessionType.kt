@@ -89,6 +89,7 @@ data class SessionSnapshot(
     /** Pomodoro-only state. */
     val pomodoroPhase: PomodoroPhase = PomodoroPhase.FOCUS,
     val completedPomodoros: Int = 0,
+    val taskName: String = "",
 
     /** Blind-box only state. */
     val randomPhase: RandomPhase = RandomPhase.FOCUS,
